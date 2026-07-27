@@ -42,8 +42,24 @@ let videoID = try creator.addVideo(
     tags: ["exciting", "windows", "windows 7"]
 )
 
-_ = try creator.build(to: destinationURL) // writes destination.vtiso
+_ = try creator.build(to: destinationURL) // destinationURL must end in .vtiso
 ```
+
+Notes:
+
+- The output URL **must end in `.vtiso`** — `build(to:)` throws
+  `VTISOError.invalidOutputExtension` otherwise; the extension is never
+  appended silently.
+- `creator.background` is the builder's background input. The manifest's
+  `menu.background` is *generated output*: it is overwritten from
+  `creator.background` on every build (`.none` clears it). Set
+  `creator.background`, not `creator.menu.background`.
+- `creator.discId` is generated once when the creator is constructed and is
+  reused for every build, so rebuilding the same creator produces the same
+  disc identity. Assign a new value only to describe a different disc.
+- If the destination file already exists it is replaced only after the new
+  archive has been fully written (staged in a private temporary directory,
+  then moved into place).
 
 ## What is supported
 
@@ -101,6 +117,63 @@ Client extensions describe data, not code. The kit packages the values into
 the bucket paths declared by the extension. A conforming client app renders
 its own UI from that data.
 
+### Bucket paths
+
+If the imported `client.json` contains a `bucketDefinitions` entry whose
+`bucketId` equals the extension's `clientId`, that declared `path` (normalized
+to end in `/`) is used for `client.json`, option files, custom-list files,
+uploads, and per-video files — and the same path is written into the
+manifest's `clientBuckets`. Only when no matching bucket definition exists
+does the kit fall back to `client-buckets/<clientId>/`.
+
+Bucket definitions are validated on import: empty client IDs, absolute
+paths, `..` components, URL-like paths, duplicate bucket IDs, and duplicate
+bucket paths are all rejected.
+
+An imported `client.json` is written back into the package byte-for-byte,
+so the packaged definition always matches what the visual editor produced.
+
+### Validation performed by `build(to:)`
+
+Before anything is written, the builder validates:
+
+- non-empty `title` and creator display name, at least one video, unique
+  video IDs, unique extra IDs, and `compatibility.minRuntime == "1.0"`
+- every supplied client value refers to a field ID declared in
+  `client.json` (`checkboxes`, `textFields`, `selectFields`, `customLists`,
+  `fileUploads`) — unknown IDs throw
+- per-video values must supply the ID of a video that exists on the
+  creator; supplying a video ID for a shared field (or omitting it for a
+  per-video field) throws
+- required per-video fields are validated **per video**: every video must
+  have a value (or a usable default)
+- select values (explicit or default) must be one of the declared `options`
+- text values must respect `maxLength`
+- file uploads enforce `required`, `multiple`, `maxSizeBytes`, and
+  `allowedTypes` using local file metadata only. `allowedTypes` entries may
+  be extension-style (`.png`), exact MIME strings (`image/png`), or wildcard
+  MIME groups (`image/*`); MIME types are detected from the file extension
+  via a small built-in table — when the MIME type cannot be detected, only
+  extension-style entries can allow the file
+- custom lists enforce `required`, `minItems`, and `maxItems`, and every
+  item is validated recursively against the list's `itemSchema`
+
+Declared custom lists are always written, even when optional and empty —
+an empty JSON array is produced so clients can rely on the declared
+`bucketFile` existing.
+
+### Supported item-schema primitives
+
+Only these primitive schema names are supported: `string`, `string[]`,
+`number`, `number[]`, `boolean`, `boolean[]`, `file`, `file[]` — plus nested
+`{ "type": "object", "fields": { … } }` and `{ "type": "array", "items": … }`
+schemas. Any other primitive name is rejected when the extension is set.
+
+Limitation: `VTISOJSON` cannot carry binary data, so `file` / `file[]`
+values are validated as package-relative path **strings** (the shape
+VideoThing writes). The kit does not resolve or verify the referenced
+files.
+
 ### Oyster example (third-party)
 
 Oyster is a third-party VTISO client. The kit contains no Oyster-specific
@@ -109,9 +182,10 @@ behavior — see `Examples/OysterChaptersExample.swift`.
 ## Errors
 
 `VTISOError` covers missing files, unreadable sources, invalid paths,
-duplicate IDs / destinations, invalid hex colors, invalid client
-definitions, missing required extension values, JSON encoding, temp dir,
-ZIP creation, and output write failures.
+duplicate IDs / destinations, invalid hex colors, invalid output
+extensions, invalid client definitions, unknown field or video IDs,
+invalid or missing extension values, JSON encoding, temp dir, ZIP
+creation, and output write failures.
 
 ## Tests
 
@@ -119,8 +193,12 @@ ZIP creation, and output write failures.
 swift test
 ```
 
-Runs the included XCTest suite covering minimal builds, layout coverage,
-hex validation, path traversal rejection, and duplicate-ID rejection.
+Runs the included XCTest suite covering minimal builds, output-extension
+rejection, stable disc IDs, declared/fallback bucket paths, unsafe bucket
+path rejection, unknown field/video IDs, per-video vs. shared misuse,
+select/text/upload/custom-list validation, recursive item-schema
+validation, archive layout (manifest at root, no wrapping folder),
+replacement of existing outputs, and temp-dir cleanup after failures.
 
 ## Limitations
 

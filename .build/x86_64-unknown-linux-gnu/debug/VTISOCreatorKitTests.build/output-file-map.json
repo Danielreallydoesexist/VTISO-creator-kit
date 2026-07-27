@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKitTests.build/master.swiftdeps"
+  },
+  "/workspace/Tests/VTISOCreatorKitTests/VTISOCreatorKitTests.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKitTests.build/VTISOCreatorKitTests.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKitTests.build/VTISOCreatorKitTests.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKitTests.build/VTISOCreatorKitTests~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKitTests.build/VTISOCreatorKitTests.swiftdeps"
+  }
+}

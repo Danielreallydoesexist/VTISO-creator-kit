@@ -1,0 +1,53 @@
+{
+  "": {
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/master.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOBackground.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOBackground.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOBackground.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOBackground~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOBackground.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOClientExtension.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientExtension.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientExtension.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientExtension~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientExtension.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOClientValues.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientValues.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientValues.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientValues~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOClientValues.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOCreator.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOCreator.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOCreator.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOCreator~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOCreator.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOError.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOError.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOError.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOError~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOError.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOManifest.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOManifest.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOManifest.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOManifest~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOManifest.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOPackageWriter.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPackageWriter.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPackageWriter.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPackageWriter~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPackageWriter.swiftdeps"
+  },
+  "/workspace/Sources/VTISOCreatorKit/VTISOPathValidator.swift": {
+    "dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPathValidator.d",
+    "object": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPathValidator.swift.o",
+    "swiftmodule": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPathValidator~partial.swiftmodule",
+    "swift-dependencies": "/workspace/.build/x86_64-unknown-linux-gnu/debug/VTISOCreatorKit.build/VTISOPathValidator.swiftdeps"
+  }
+}

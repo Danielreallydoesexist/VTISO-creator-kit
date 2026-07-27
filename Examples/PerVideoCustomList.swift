@@ -2,7 +2,12 @@ import Foundation
 import VTISOCreatorKit
 
 // Attach a per-video custom list. The generic API doesn't know about
-// "chapters" specifically — it writes whatever items you pass.
+// "chapters" specifically — it writes whatever items you pass, after
+// validating them against the list's declared itemSchema.
+//
+// Per-video values must reference a video that exists on the creator —
+// build(to:) throws for unknown video IDs. Note the video is added first
+// and its returned ID is used below.
 func makePerVideoCustomListExample(outputURL: URL,
                                    video: URL,
                                    clientJSON: URL) throws -> URL {

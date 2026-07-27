@@ -16,6 +16,10 @@ public enum VTISOError: Error, CustomStringConvertible {
     case zipCreationFailed(underlying: Error)
     case outputWriteFailed(URL, underlying: Error)
     case invalidHexColor(String)
+    case invalidOutputExtension(String)
+    case unknownExtensionFieldID(String)
+    case invalidExtensionValue(String)
+    case duplicateExtraID(String)
 
     public var description: String {
         switch self {
@@ -34,6 +38,10 @@ public enum VTISOError: Error, CustomStringConvertible {
         case .zipCreationFailed(let e):                return "ZIP creation failed: \(e)"
         case .outputWriteFailed(let u, let e):         return "Output write failed \(u.path): \(e)"
         case .invalidHexColor(let s):                  return "Invalid hex color: \(s)"
+        case .invalidOutputExtension(let p):           return "Output must end in .vtiso: \(p)"
+        case .unknownExtensionFieldID(let s):          return "Unknown client-extension field ID: \(s)"
+        case .invalidExtensionValue(let s):            return "Invalid client-extension value: \(s)"
+        case .duplicateExtraID(let id):                return "Duplicate extra ID: \(id)"
         }
     }
 }

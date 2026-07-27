@@ -4,9 +4,11 @@ import ZIPFoundation
 /// Writes an assembled staging directory to a `.vtiso` (ZIP) archive.
 /// The archive contains no wrapping folder — `manifest.json` sits at the root.
 ///
-/// The archive is first created at a private temporary path; the destination
-/// is only replaced once the new archive is complete, so a failed build never
-/// destroys an existing output file and never leaves a partial archive behind.
+/// The archive is first created at a hidden temporary sibling of the
+/// destination (same directory, same volume); the destination is only
+/// replaced once the new archive is complete, so a failed build never
+/// destroys an existing output file and never leaves a partial archive
+/// behind.
 public enum VTISOPackageWriter {
     public static func writeArchive(stagingDir: URL, to output: URL) throws {
         let fm = FileManager.default
@@ -20,8 +22,16 @@ public enum VTISOPackageWriter {
             throw VTISOError.sourceFileMissing(manifestURL)
         }
 
-        let tempArchive = fm.temporaryDirectory
-            .appendingPathComponent("vtiso-archive-\(UUID().uuidString.lowercased()).vtiso")
+        // Stage the new archive as a hidden sibling of the destination so it
+        // lives on the same filesystem volume, keeping the final move or
+        // replacement as atomic as possible.
+        let tempArchive = output
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(output.lastPathComponent).new-\(UUID().uuidString.lowercased())")
+        try? fm.removeItem(at: tempArchive)
+        defer {
+            try? fm.removeItem(at: tempArchive)
+        }
 
         do {
             // `subpathsOfDirectory` throws on enumeration failure instead of
@@ -36,9 +46,8 @@ public enum VTISOPackageWriter {
                 try archive.addEntry(with: relPath, relativeTo: stagingDir, compressionMethod: .deflate)
             }
         } catch {
-            // Never leave a partial archive behind; the existing destination
-            // (if any) is untouched.
-            try? fm.removeItem(at: tempArchive)
+            // The deferred cleanup removes the partial archive; the existing
+            // destination (if any) is untouched.
             throw VTISOError.zipCreationFailed(underlying: error)
         }
 
@@ -67,11 +76,9 @@ public enum VTISOPackageWriter {
                 try fm.moveItem(at: tempArchive, to: output)
             }
         } catch {
-            try? fm.removeItem(at: tempArchive)
             throw VTISOError.outputWriteFailed(output, underlying: error)
         }
-        // The move consumed the temporary archive on success; make sure no
-        // stray copy remains (e.g. after a Darwin replaceItemAt).
-        try? fm.removeItem(at: tempArchive)
+        // The move consumes the temporary archive on success; the deferred
+        // cleanup removes any stray copy in every other case.
     }
 }

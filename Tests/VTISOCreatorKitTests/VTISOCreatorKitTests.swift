@@ -75,6 +75,17 @@ final class VTISOCreatorKitTests: XCTestCase {
         try JSONDecoder().decode(VTISOManifest.self, from: try extractEntry(url, path: "manifest.json"))
     }
 
+    /// Asserts that the destination's parent directory contains no leftover
+    /// hidden temporary archives (".<name>.new-…" / ".<name>.backup-…").
+    func assertNoTempSiblings(around output: URL,
+                              file: StaticString = #filePath, line: UInt = #line) throws {
+        let parent = output.deletingLastPathComponent()
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: parent.path)
+            .filter { $0.hasPrefix(".\(output.lastPathComponent).") }
+        XCTAssertTrue(leftovers.isEmpty, "temporary sibling archives left behind: \(leftovers)",
+                      file: file, line: line)
+    }
+
     // MARK: - Basic building
 
     func testBuildsMinimalPortableVTISO() throws {
@@ -95,6 +106,7 @@ final class VTISOCreatorKitTests: XCTestCase {
         _ = try creator.build(to: out)
         XCTAssertTrue(FileManager.default.fileExists(atPath: out.path))
         XCTAssertEqual(try extractManifest(out).title, "Test")
+        try assertNoTempSiblings(around: out)
     }
 
     func testRejectsNonVTISOOutputExtension() throws {
@@ -127,6 +139,7 @@ final class VTISOCreatorKitTests: XCTestCase {
         _ = try creator.build(to: out)
         let manifest = try extractManifest(out)
         XCTAssertEqual(manifest.title, "Test")
+        try assertNoTempSiblings(around: out)
     }
 
     func testManifestAtArchiveRootWithNoWrappingFolder() throws {
@@ -767,6 +780,63 @@ final class VTISOCreatorKitTests: XCTestCase {
 
         XCTAssertEqual(try Data(contentsOf: out), originalData, "failed build must not touch the existing output")
         XCTAssertEqual(try extractManifest(out).title, "Test")
+        try assertNoTempSiblings(around: out)
+    }
+
+    func testTempArchiveIsCreatedInDestinationParentDirectory() throws {
+        let fm = FileManager.default
+        let creator = try makeCreatorWithVideo()
+        let out = try newOutputURL("blocked.vtiso")
+        let parent = out.deletingLastPathComponent()
+
+        // Make the destination parent read-only: if the temporary archive is
+        // staged there (same volume as the destination), archive *creation*
+        // fails with zipCreationFailed. If it were staged in the global temp
+        // directory instead, creation would succeed and the failure would
+        // surface later as outputWriteFailed.
+        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: parent.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: parent.path) }
+        try XCTSkipIf(fm.isWritableFile(atPath: parent.path),
+                      "filesystem permissions are not enforced (running as root?)")
+
+        XCTAssertThrowsError(try creator.build(to: out)) { error in
+            guard case VTISOError.zipCreationFailed = error as! VTISOError else {
+                return XCTFail("expected zipCreationFailed from sibling temp archive, got \(error)")
+            }
+        }
+        XCTAssertFalse(fm.fileExists(atPath: out.path))
+        try assertNoTempSiblings(around: out)
+    }
+
+    func testFailedArchiveCreationPreservesExistingDestination() throws {
+        let fm = FileManager.default
+        let out = try newOutputURL("keep-on-zip-failure.vtiso")
+        let good = try makeCreatorWithVideo()
+        _ = try good.build(to: out)
+        let originalData = try Data(contentsOf: out)
+
+        // A staging directory containing an unreadable file makes archive
+        // creation fail after the writer's up-front checks pass.
+        let staging = fm.temporaryDirectory
+            .appendingPathComponent("staging-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: staging.appendingPathComponent("manifest.json"))
+        let unreadable = staging.appendingPathComponent("unreadable.bin")
+        try Data([1, 2, 3]).write(to: unreadable)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
+        try XCTSkipIf(fm.isReadableFile(atPath: unreadable.path),
+                      "filesystem permissions are not enforced (running as root?)")
+
+        XCTAssertThrowsError(try VTISOPackageWriter.writeArchive(stagingDir: staging, to: out)) { error in
+            guard case VTISOError.zipCreationFailed = error as! VTISOError else {
+                return XCTFail("expected zipCreationFailed, got \(error)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: out), originalData,
+                       "existing destination must remain untouched when archive creation fails")
+        XCTAssertEqual(try extractManifest(out).title, "Test")
+        try assertNoTempSiblings(around: out)
     }
 
     func testWriterRejectsMissingStagingOrManifest() throws {

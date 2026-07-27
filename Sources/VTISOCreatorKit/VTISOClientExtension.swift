@@ -51,6 +51,26 @@ public struct CxFileUploadField: Codable, Sendable {
     public var destination: String
     public var maxSizeBytes: Int?
     public var perVideo: Bool?
+
+    public init(id: String,
+                label: String,
+                description: String? = nil,
+                allowedTypes: [String] = [],
+                multiple: Bool = false,
+                required: Bool = false,
+                destination: String,
+                maxSizeBytes: Int? = nil,
+                perVideo: Bool? = nil) {
+        self.id = id
+        self.label = label
+        self.description = description
+        self.allowedTypes = allowedTypes
+        self.multiple = multiple
+        self.required = required
+        self.destination = destination
+        self.maxSizeBytes = maxSizeBytes
+        self.perVideo = perVideo
+    }
 }
 
 public struct CxCustomListField: Codable, Sendable {
@@ -63,6 +83,26 @@ public struct CxCustomListField: Codable, Sendable {
     public var bucketFile: String
     public var itemSchema: [String: CxItemSchemaFieldType]
     public var perVideo: Bool?
+
+    public init(id: String,
+                label: String,
+                description: String? = nil,
+                required: Bool = false,
+                minItems: Int? = nil,
+                maxItems: Int? = nil,
+                bucketFile: String,
+                itemSchema: [String: CxItemSchemaFieldType],
+                perVideo: Bool? = nil) {
+        self.id = id
+        self.label = label
+        self.description = description
+        self.required = required
+        self.minItems = minItems
+        self.maxItems = maxItems
+        self.bucketFile = bucketFile
+        self.itemSchema = itemSchema
+        self.perVideo = perVideo
+    }
 }
 
 public struct CxCheckboxField: Codable, Sendable {
@@ -74,6 +114,24 @@ public struct CxCheckboxField: Codable, Sendable {
     public var bucketFile: String
     public var group: String?
     public var perVideo: Bool?
+
+    public init(id: String,
+                label: String,
+                description: String? = nil,
+                defaultValue: Bool = false,
+                required: Bool = false,
+                bucketFile: String,
+                group: String? = nil,
+                perVideo: Bool? = nil) {
+        self.id = id
+        self.label = label
+        self.description = description
+        self.defaultValue = defaultValue
+        self.required = required
+        self.bucketFile = bucketFile
+        self.group = group
+        self.perVideo = perVideo
+    }
 }
 
 public struct CxTextField: Codable, Sendable {
@@ -86,6 +144,26 @@ public struct CxTextField: Codable, Sendable {
     public var bucketFile: String
     public var group: String?
     public var perVideo: Bool?
+
+    public init(id: String,
+                label: String,
+                description: String? = nil,
+                defaultValue: String? = nil,
+                required: Bool = false,
+                maxLength: Int? = nil,
+                bucketFile: String,
+                group: String? = nil,
+                perVideo: Bool? = nil) {
+        self.id = id
+        self.label = label
+        self.description = description
+        self.defaultValue = defaultValue
+        self.required = required
+        self.maxLength = maxLength
+        self.bucketFile = bucketFile
+        self.group = group
+        self.perVideo = perVideo
+    }
 }
 
 public struct CxSelectField: Codable, Sendable {
@@ -98,6 +176,26 @@ public struct CxSelectField: Codable, Sendable {
     public var bucketFile: String
     public var group: String?
     public var perVideo: Bool?
+
+    public init(id: String,
+                label: String,
+                description: String? = nil,
+                options: [String],
+                defaultValue: String? = nil,
+                required: Bool = false,
+                bucketFile: String,
+                group: String? = nil,
+                perVideo: Bool? = nil) {
+        self.id = id
+        self.label = label
+        self.description = description
+        self.options = options
+        self.defaultValue = defaultValue
+        self.required = required
+        self.bucketFile = bucketFile
+        self.group = group
+        self.perVideo = perVideo
+    }
 }
 
 public struct CxMenuAddition: Codable, Sendable {
@@ -105,6 +203,16 @@ public struct CxMenuAddition: Codable, Sendable {
     public var label: String
     public var appearsInMenu: Bool
     public var requiresList: String?
+
+    public init(id: String,
+                label: String,
+                appearsInMenu: Bool = true,
+                requiresList: String? = nil) {
+        self.id = id
+        self.label = label
+        self.appearsInMenu = appearsInMenu
+        self.requiresList = requiresList
+    }
 }
 
 public struct CxExportFeatures: Codable, Sendable {
@@ -147,4 +255,31 @@ public struct ClientExtensionSpec: Codable, Sendable {
     public var supportedPlatforms: [String]
     public var exportFeatures: CxExportFeatures
     public var bucketDefinitions: [CxBucketDefinition]
+
+    /// Creates a spec in code. When `bucketDefinitions` is not supplied, a
+    /// single default bucket `client-buckets/<clientId>/` (with `bucketId`
+    /// equal to `clientId`) is declared; passing an explicit array — even an
+    /// empty one — uses exactly what was passed.
+    public init(clientId: String,
+                clientName: String,
+                description: String? = nil,
+                extensionVersion: String = "1.0",
+                minimumRuntimeVersion: String = "1.0",
+                authorName: String? = nil,
+                websiteUrl: String? = nil,
+                supportedPlatforms: [String] = [],
+                exportFeatures: CxExportFeatures = CxExportFeatures(),
+                bucketDefinitions: [CxBucketDefinition]? = nil) {
+        self.clientId = clientId
+        self.clientName = clientName
+        self.description = description
+        self.extensionVersion = extensionVersion
+        self.minimumRuntimeVersion = minimumRuntimeVersion
+        self.authorName = authorName
+        self.websiteUrl = websiteUrl
+        self.supportedPlatforms = supportedPlatforms
+        self.exportFeatures = exportFeatures
+        self.bucketDefinitions = bucketDefinitions
+            ?? [CxBucketDefinition(bucketId: clientId, path: "client-buckets/\(clientId)/")]
+    }
 }

@@ -143,11 +143,23 @@ final class VTISOCreatorKitTests: XCTestCase {
         }
     }
 
+    private func tempBuildArtifacts() throws -> Set<String> {
+        let fm = FileManager.default
+        return Set(try fm.contentsOfDirectory(atPath: fm.temporaryDirectory.path)
+            .filter { $0.hasPrefix("vtiso-build-") || $0.hasPrefix("vtiso-archive-") })
+    }
+
+    func testTempArtifactsCleanedUpAfterSuccessfulBuild() throws {
+        let before = try tempBuildArtifacts()
+        let creator = try makeCreatorWithVideo()
+        _ = try creator.build(to: try newOutputURL())
+        XCTAssertEqual(try tempBuildArtifacts(), before, "temporary artifacts were left behind after success")
+    }
+
     func testTempDirectoriesCleanedUpAfterFailedBuild() throws {
         let fm = FileManager.default
         func buildTempDirs() throws -> Set<String> {
-            Set(try fm.contentsOfDirectory(atPath: fm.temporaryDirectory.path)
-                .filter { $0.hasPrefix("vtiso-build-") })
+            try tempBuildArtifacts()
         }
         let before = try buildTempDirs()
 
@@ -648,6 +660,163 @@ final class VTISOCreatorKitTests: XCTestCase {
             .contains("client-buckets/oyster/per-video/v1/custom-lists/chapters.json"))
     }
 
+    // MARK: - Public model initializers
+
+    func testPublicModelInitializersWithDefaults() throws {
+        let spec = ClientExtensionSpec(clientId: "example-client", clientName: "Example Client")
+        XCTAssertEqual(spec.extensionVersion, "1.0")
+        XCTAssertEqual(spec.minimumRuntimeVersion, "1.0")
+        XCTAssertEqual(spec.supportedPlatforms, [])
+        XCTAssertTrue(spec.exportFeatures.fileUploads.isEmpty)
+        XCTAssertEqual(spec.bucketDefinitions.count, 1)
+        XCTAssertEqual(spec.bucketDefinitions.first?.bucketId, "example-client")
+        XCTAssertEqual(spec.bucketDefinitions.first?.path, "client-buckets/example-client/")
+
+        // Explicit definitions (even empty) are used as-is, no fallback.
+        let explicit = ClientExtensionSpec(clientId: "x", clientName: "X", bucketDefinitions: [])
+        XCTAssertTrue(explicit.bucketDefinitions.isEmpty)
+
+        _ = CxFileUploadField(id: "u", label: "U", destination: "uploads")
+        _ = CxCustomListField(id: "l", label: "L", bucketFile: "l.json", itemSchema: [:])
+        _ = CxCheckboxField(id: "c", label: "C", bucketFile: "o.json")
+        _ = CxTextField(id: "t", label: "T", bucketFile: "o.json")
+        _ = CxSelectField(id: "s", label: "S", options: ["a"], bucketFile: "o.json")
+        _ = CxMenuAddition(id: "m", label: "M")
+    }
+
+    // MARK: - Definition-level validation
+
+    func testRejectsEmptyClientName() throws {
+        let creator = try makeCreatorWithVideo()
+        var spec = makeSpec()
+        spec.clientName = "  "
+        XCTAssertThrowsError(try creator.setClientExtension(spec)) { error in
+            guard case VTISOError.invalidClientDefinition = error as! VTISOError else {
+                return XCTFail("expected invalidClientDefinition, got \(error)")
+            }
+        }
+    }
+
+    func testRejectsDuplicateAndEmptyExportFeatureIDs() throws {
+        let creator = try makeCreatorWithVideo()
+
+        // Duplicate within a category.
+        let sameCategory = makeSpec(checkboxes: [
+            CxCheckboxField(id: "dup", label: "a", bucketFile: "o.json"),
+            CxCheckboxField(id: "dup", label: "b", bucketFile: "o.json")
+        ])
+        XCTAssertThrowsError(try creator.setClientExtension(sameCategory))
+
+        // Duplicate across categories (IDs are globally unique).
+        let crossCategory = makeSpec(checkboxes: [CxCheckboxField(id: "dup", label: "a", bucketFile: "o.json")],
+                                     textFields: [CxTextField(id: "dup", label: "b", bucketFile: "o.json")])
+        XCTAssertThrowsError(try creator.setClientExtension(crossCategory))
+
+        // Empty ID.
+        let emptyID = makeSpec(selectFields: [CxSelectField(id: "", label: "s", options: ["a"], bucketFile: "o.json")])
+        XCTAssertThrowsError(try creator.setClientExtension(emptyID))
+    }
+
+    func testCategoryMismatchProducesClearError() throws {
+        let creator = try makeCreatorWithVideo()
+        try creator.setClientExtension(makeSpec(textFields: [
+            CxTextField(id: "note", label: "N", bucketFile: "o.json")
+        ]))
+        // "note" exists, but as a text field — using it as a checkbox must fail.
+        creator.setClientOptionCheckbox(id: "note", value: true)
+        XCTAssertThrowsError(try creator.build(to: try newOutputURL())) { error in
+            let d = "\(error)"
+            XCTAssertTrue(d.contains("note"), "error should name the ID: \(d)")
+            XCTAssertTrue(d.contains("text field"), "error should name the actual category: \(d)")
+        }
+    }
+
+    // MARK: - Destination handling
+
+    func testRejectsDirectoryDestination() throws {
+        let creator = try makeCreatorWithVideo()
+        let dir = try newOutputURL("folder.vtiso")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try creator.build(to: dir)) { error in
+            guard case VTISOError.outputWriteFailed = error as! VTISOError else {
+                return XCTFail("expected outputWriteFailed, got \(error)")
+            }
+        }
+    }
+
+    func testCreatesMissingDestinationParentDirectory() throws {
+        let creator = try makeCreatorWithVideo()
+        let out = try newOutputURL().deletingLastPathComponent()
+            .appendingPathComponent("nested/deeper/out.vtiso")
+        _ = try creator.build(to: out)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out.path))
+    }
+
+    func testOldOutputPreservedWhenNewBuildFails() throws {
+        let out = try newOutputURL("keep.vtiso")
+        let good = try makeCreatorWithVideo()
+        _ = try good.build(to: out)
+        let originalData = try Data(contentsOf: out)
+
+        // Second build fails during assembly (required text missing).
+        let bad = try makeCreatorWithVideo()
+        try bad.setClientExtension(makeSpec(textFields: [
+            CxTextField(id: "req", label: "R", required: true, bucketFile: "o.json")
+        ]))
+        XCTAssertThrowsError(try bad.build(to: out))
+
+        XCTAssertEqual(try Data(contentsOf: out), originalData, "failed build must not touch the existing output")
+        XCTAssertEqual(try extractManifest(out).title, "Test")
+    }
+
+    func testWriterRejectsMissingStagingOrManifest() throws {
+        let fm = FileManager.default
+        let out = try newOutputURL("w.vtiso")
+        let missing = fm.temporaryDirectory.appendingPathComponent("does-not-exist-\(UUID().uuidString)")
+        XCTAssertThrowsError(try VTISOPackageWriter.writeArchive(stagingDir: missing, to: out))
+
+        let emptyStaging = fm.temporaryDirectory.appendingPathComponent("staging-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: emptyStaging, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try VTISOPackageWriter.writeArchive(stagingDir: emptyStaging, to: out))
+        XCTAssertFalse(fm.fileExists(atPath: out.path))
+    }
+
+    // MARK: - Video validation
+
+    func testRejectsEmptyVideoTitle() throws {
+        let creator = VTISOCreator(title: "T", creatorDisplayName: "x")
+        let video = try makeTempFile(name: "clip.mp4")
+        _ = try creator.addVideo(id: "v1", title: "  ", fileURL: video)
+        XCTAssertThrowsError(try creator.build(to: try newOutputURL()))
+    }
+
+    func testRejectsSourceFileRemovedAfterAdding() throws {
+        let creator = VTISOCreator(title: "T", creatorDisplayName: "x")
+        let video = try makeTempFile(name: "clip.mp4")
+        _ = try creator.addVideo(id: "v1", title: "a", fileURL: video)
+        try FileManager.default.removeItem(at: video)
+        XCTAssertThrowsError(try creator.build(to: try newOutputURL())) { error in
+            guard case VTISOError.sourceFileMissing = error as! VTISOError else {
+                return XCTFail("expected sourceFileMissing, got \(error)")
+            }
+        }
+    }
+
+    // MARK: - Optional-list file behavior (documented)
+
+    func testDeclaredOptionalEmptyListWritesEmptyArray() throws {
+        let creator = try makeCreatorWithVideo()
+        try creator.setClientExtension(makeSpec(customLists: [
+            CxCustomListField(id: "faq", label: "FAQ", bucketFile: "custom-lists/faq.json",
+                              itemSchema: ["q": .primitive("string")])
+        ]))
+        let out = try newOutputURL()
+        _ = try creator.build(to: out)
+        let data = try extractEntry(out, path: "client-buckets/oyster/custom-lists/faq.json")
+        let decoded = try JSONDecoder().decode([VTISOJSON].self, from: data)
+        XCTAssertTrue(decoded.isEmpty, "declared optional lists are written as an empty JSON array")
+    }
+
     // MARK: - Path & misc primitives
 
     func testPathValidatorRejectsTraversal() {
@@ -655,7 +824,34 @@ final class VTISOCreatorKitTests: XCTestCase {
         XCTAssertThrowsError(try VTISOPathValidator.validate("/absolute"))
         XCTAssertThrowsError(try VTISOPathValidator.validate("with//empty"))
         XCTAssertThrowsError(try VTISOPathValidator.validate("http://example.com"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate("a/./b"))
         XCTAssertNoThrow(try VTISOPathValidator.validate("videos/video_1.mp4"))
+    }
+
+    func testPathValidatorRejectsWindowsBackslashAndNulPaths() {
+        XCTAssertThrowsError(try VTISOPathValidator.validate("C:/file"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate("c:/windows/system32"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate("folder\\file.txt"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate("a/b\\c"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate("bad\u{0}name"))
+        XCTAssertThrowsError(try VTISOPathValidator.validate(""))
+    }
+
+    func testSanitizeFilenameNeverEmptyOrUnsafe() {
+        XCTAssertEqual(VTISOPathValidator.sanitizeFilename(""), "file")
+        XCTAssertEqual(VTISOPathValidator.sanitizeFilename(".."), "file")
+        XCTAssertEqual(VTISOPathValidator.sanitizeFilename("."), "file")
+        XCTAssertEqual(VTISOPathValidator.sanitizeFilename("a/b:c"), "a_b_c")
+        XCTAssertEqual(VTISOPathValidator.sanitizeFilename("ok-name_1.txt"), "ok-name_1.txt")
+    }
+
+    func testErrorsProvideLocalizedDescriptions() {
+        let error: VTISOError = .invalidOutputExtension("out.zip")
+        XCTAssertEqual(error.errorDescription, error.description)
+        XCTAssertTrue(error.localizedDescription.contains("out.zip"),
+                      "localizedDescription should carry the real message: \(error.localizedDescription)")
+        let unknown: VTISOError = .unknownExtensionFieldID("x")
+        XCTAssertNotNil((unknown as LocalizedError).errorDescription)
     }
 
     func testHexRegex() {

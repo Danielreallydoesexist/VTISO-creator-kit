@@ -132,11 +132,12 @@ public final class VTISOCreator {
 
     // MARK: - Extras
 
-    /// Adds an extra. IDs must be unique within the disc; omitting `id`
-    /// generates a fresh lowercase UUID.
+    /// Adds an extra. IDs must be non-empty and unique within the disc;
+    /// omitting `id` generates a fresh lowercase UUID.
     public func addExtra(id: String = UUID().uuidString.lowercased(),
                          title: String,
                          body: String) throws {
+        if id.isEmpty { throw VTISOError.invalidManifestValue("extra id must not be empty") }
         if extras.contains(where: { $0.id == id }) { throw VTISOError.duplicateExtraID(id) }
         extras.append(VTISOExtra(id: id, title: title, body: body))
     }
@@ -167,7 +168,29 @@ public final class VTISOCreator {
 
     public func setClientExtension(_ spec: ClientExtensionSpec) throws {
         if spec.clientId.isEmpty { throw VTISOError.invalidClientDefinition("clientId empty") }
+        if spec.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw VTISOError.invalidClientDefinition("clientName empty")
+        }
         try VTISOPathValidator.validate("client-buckets/\(spec.clientId)/client.json")
+
+        // Export-feature IDs must be non-empty and globally unique across all
+        // categories, because multiple field types may write into the same
+        // bucket file.
+        var seenFeatureIDs = Set<String>()
+        func registerFeatureID(_ id: String, category: String) throws {
+            if id.isEmpty {
+                throw VTISOError.invalidClientDefinition("\(category) with an empty id")
+            }
+            if !seenFeatureIDs.insert(id).inserted {
+                throw VTISOError.invalidClientDefinition("duplicate export-feature id '\(id)' (\(category)); ids must be unique across all categories")
+            }
+        }
+        for f in spec.exportFeatures.fileUploads   { try registerFeatureID(f.id, category: "file upload") }
+        for f in spec.exportFeatures.customLists   { try registerFeatureID(f.id, category: "custom list") }
+        for f in spec.exportFeatures.checkboxes    { try registerFeatureID(f.id, category: "checkbox") }
+        for f in spec.exportFeatures.textFields    { try registerFeatureID(f.id, category: "text field") }
+        for f in spec.exportFeatures.selectFields  { try registerFeatureID(f.id, category: "select field") }
+        for f in spec.exportFeatures.menuAdditions { try registerFeatureID(f.id, category: "menu addition") }
 
         // Validate declared buckets: package-relative paths, no duplicates.
         var seenBucketIDs = Set<String>()
@@ -234,10 +257,23 @@ public final class VTISOCreator {
         guard outputURL.pathExtension.lowercased() == "vtiso" else {
             throw VTISOError.invalidOutputExtension(outputURL.lastPathComponent)
         }
+        let fm = FileManager.default
+        // Reject destinations that point to an existing directory.
+        if let values = try? outputURL.resourceValues(forKeys: [.isDirectoryKey]),
+           values.isDirectory == true {
+            throw VTISOError.outputWriteFailed(outputURL, underlying: CocoaError(.fileWriteFileExists))
+        }
+        // Ensure the destination parent directory exists.
+        let parent = outputURL.deletingLastPathComponent()
+        do {
+            try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+        } catch {
+            throw VTISOError.outputWriteFailed(outputURL, underlying: error)
+        }
+
         try validateManifestBasics()
         try validateClientValueKeys()
 
-        let fm = FileManager.default
         let tempDir = fm.temporaryDirectory
             .appendingPathComponent("vtiso-build-\(UUID().uuidString.lowercased())", isDirectory: true)
         do {
@@ -248,39 +284,11 @@ public final class VTISOCreator {
         defer { try? fm.removeItem(at: tempDir) }
 
         let staging = tempDir.appendingPathComponent("staging", isDirectory: true)
-        let tempArchive = tempDir.appendingPathComponent("package.vtiso")
-
         try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         try assemble(into: staging)
-        try VTISOPackageWriter.writeArchive(stagingDir: staging, to: tempArchive)
-
-        // The archive is complete; move it into place, replacing any
-        // existing destination as late (and as atomically) as possible.
-        do {
-            if fm.fileExists(atPath: outputURL.path) {
-#if canImport(Darwin)
-                _ = try fm.replaceItemAt(outputURL, withItemAt: tempArchive)
-#else
-                // swift-corelibs-foundation's replaceItemAt is unreliable, so
-                // move the old file aside, move the new one in, and restore
-                // the original if that fails.
-                let backup = outputURL.deletingLastPathComponent()
-                    .appendingPathComponent(".\(outputURL.lastPathComponent).backup-\(UUID().uuidString)")
-                try fm.moveItem(at: outputURL, to: backup)
-                do {
-                    try fm.moveItem(at: tempArchive, to: outputURL)
-                    try? fm.removeItem(at: backup)
-                } catch {
-                    try? fm.moveItem(at: backup, to: outputURL)
-                    throw error
-                }
-#endif
-            } else {
-                try fm.moveItem(at: tempArchive, to: outputURL)
-            }
-        } catch {
-            throw VTISOError.outputWriteFailed(outputURL, underlying: error)
-        }
+        // The writer stages the archive at a temporary path and replaces the
+        // destination only once the new archive is complete.
+        try VTISOPackageWriter.writeArchive(stagingDir: staging, to: outputURL)
         return outputURL
     }
 
@@ -295,9 +303,21 @@ public final class VTISOCreator {
         }
         if videos.isEmpty { throw VTISOError.invalidManifestValue("no videos added") }
 
+        let fm = FileManager.default
         var seenVideoIDs = Set<String>()
         for v in videos {
             guard seenVideoIDs.insert(v.id).inserted else { throw VTISOError.duplicateVideoID(v.id) }
+            if v.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw VTISOError.invalidManifestValue("video '\(v.id)' has an empty title")
+            }
+            // Source files were checked when added; re-check before packaging
+            // in case they were moved or made unreadable since.
+            guard fm.fileExists(atPath: v.sourceURL.path), fm.isReadableFile(atPath: v.sourceURL.path) else {
+                throw VTISOError.sourceFileMissing(v.sourceURL)
+            }
+            if let t = v.thumbnailURL, !fm.fileExists(atPath: t.path) {
+                throw VTISOError.sourceFileMissing(t)
+            }
             guard v.source.hasPrefix("videos/") else {
                 throw VTISOError.invalidManifestValue("video source '\(v.source)' must be under videos/")
             }
@@ -312,8 +332,9 @@ public final class VTISOCreator {
             throw VTISOError.unsupportedVTISOVersion(compatibility.minRuntime)
         }
         var seenExtraIDs = Set<String>()
-        for e in extras where !seenExtraIDs.insert(e.id).inserted {
-            throw VTISOError.duplicateExtraID(e.id)
+        for e in extras {
+            if e.id.isEmpty { throw VTISOError.invalidManifestValue("extra with an empty id") }
+            if !seenExtraIDs.insert(e.id).inserted { throw VTISOError.duplicateExtraID(e.id) }
         }
     }
 
@@ -332,6 +353,16 @@ public final class VTISOCreator {
 
         let videoIDSet = Set(videos.map { $0.id })
 
+        // Global ID -> category map (IDs are unique across categories) so a
+        // category mismatch produces a precise error.
+        var categoryByID: [String: String] = [:]
+        for f in spec.exportFeatures.fileUploads   { categoryByID[f.id] = "file upload" }
+        for f in spec.exportFeatures.customLists   { categoryByID[f.id] = "custom list" }
+        for f in spec.exportFeatures.checkboxes    { categoryByID[f.id] = "checkbox" }
+        for f in spec.exportFeatures.textFields    { categoryByID[f.id] = "text field" }
+        for f in spec.exportFeatures.selectFields  { categoryByID[f.id] = "select field" }
+        for f in spec.exportFeatures.menuAdditions { categoryByID[f.id] = "menu addition" }
+
         func perVideoByID(_ pairs: [(String, Bool?)]) -> [String: Bool] {
             var m: [String: Bool] = [:]
             for (id, pv) in pairs { m[id] = (pv == true) }
@@ -340,6 +371,9 @@ public final class VTISOCreator {
         func check(_ keys: [ValueKey], kind: String, defs: [String: Bool]) throws {
             for k in keys {
                 guard let isPerVideo = defs[k.id] else {
+                    if let actual = categoryByID[k.id] {
+                        throw VTISOError.unknownExtensionFieldID("\(kind) '\(k.id)' (declared as a \(actual))")
+                    }
                     throw VTISOError.unknownExtensionFieldID("\(kind) '\(k.id)'")
                 }
                 if isPerVideo {
@@ -587,8 +621,11 @@ public final class VTISOCreator {
         return "client-buckets/\(spec.clientId)/"
     }
 
+    /// Normalizes a directory path to exactly one trailing slash.
     private static func normalizedDirectoryPath(_ path: String) -> String {
-        path.hasSuffix("/") ? path : path + "/"
+        var p = path
+        while p.hasSuffix("/") { p.removeLast() }
+        return p + "/"
     }
 
     // MARK: - Custom-list validation

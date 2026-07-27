@@ -49,7 +49,8 @@ Notes:
 
 - The output URL **must end in `.vtiso`** — `build(to:)` throws
   `VTISOError.invalidOutputExtension` otherwise; the extension is never
-  appended silently.
+  appended silently. Destinations pointing at an existing directory are
+  rejected; a missing parent directory is created automatically.
 - `creator.background` is the builder's background input. The manifest's
   `menu.background` is *generated output*: it is overwritten from
   `creator.background` on every build (`.none` clears it). Set
@@ -116,6 +117,24 @@ try creator.addClientUpload(uploadID: "resource-pack", fileURL: someFile)
 Client extensions describe data, not code. The kit packages the values into
 the bucket paths declared by the extension. A conforming client app renders
 its own UI from that data.
+
+Extensions can also be constructed in code — all client-extension models
+have public initializers with sensible defaults:
+
+```swift
+let spec = ClientExtensionSpec(
+    clientId: "example-client",
+    clientName: "Example Client"
+)
+// Declares one bucket at client-buckets/example-client/ unless explicit
+// bucketDefinitions are supplied.
+try creator.setClientExtension(spec)
+```
+
+Export-feature IDs (`fileUploads`, `customLists`, `checkboxes`,
+`textFields`, `selectFields`, `menuAdditions`) must be non-empty and unique
+across **all** categories, because multiple field types may write into the
+same bucket file.
 
 ### Bucket paths
 
@@ -186,6 +205,15 @@ duplicate IDs / destinations, invalid hex colors, invalid output
 extensions, invalid client definitions, unknown field or video IDs,
 invalid or missing extension values, JSON encoding, temp dir, ZIP
 creation, and output write failures.
+
+`VTISOError` conforms to `LocalizedError`, so `error.localizedDescription`
+(and SwiftUI alerts) show the real message instead of a generic
+"the operation couldn't be completed".
+
+Package-relative paths are strictly validated: absolute paths, Windows
+drive paths (`C:/…`), backslashes, NUL characters, URL-like paths, empty
+components, and `.` / `..` components are all rejected — never silently
+normalized.
 
 ## Tests
 

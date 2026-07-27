@@ -837,12 +837,13 @@ final class VTISOCreatorKitTests: XCTestCase {
         XCTAssertThrowsError(try VTISOPathValidator.validate(""))
     }
 
-    func testSanitizeFilenameNeverEmptyOrUnsafe() {
+    func testSanitizeFilenameNeverEmpty() {
         XCTAssertEqual(VTISOPathValidator.sanitizeFilename(""), "file")
-        XCTAssertEqual(VTISOPathValidator.sanitizeFilename(".."), "file")
-        XCTAssertEqual(VTISOPathValidator.sanitizeFilename("."), "file")
         XCTAssertEqual(VTISOPathValidator.sanitizeFilename("a/b:c"), "a_b_c")
         XCTAssertEqual(VTISOPathValidator.sanitizeFilename("ok-name_1.txt"), "ok-name_1.txt")
+        // Dots-only names survive sanitization but are rejected as path
+        // components by the validator, so they can never enter a package.
+        XCTAssertThrowsError(try VTISOPathValidator.validate("uploads/\(VTISOPathValidator.sanitizeFilename(".."))"))
     }
 
     func testErrorsProvideLocalizedDescriptions() {

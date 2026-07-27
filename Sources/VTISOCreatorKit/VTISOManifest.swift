@@ -40,7 +40,10 @@ public struct VTISOCreatorInfo: Codable, Sendable {
 
 public struct VTISOMenu: Codable, Sendable {
     public var layout: VTISOMenuLayout
-    public var background: String?          // hex color OR package-relative path
+    /// Hex color OR package-relative path. Generated output: when building
+    /// with `VTISOCreator`, this is overwritten from `creator.background`
+    /// on every build — set `creator.background` instead of this property.
+    public var background: String?
     public var buttonStyle: VTISOButtonStyle
     public var accent: VTISOAccentStyle
     public var cover: String?

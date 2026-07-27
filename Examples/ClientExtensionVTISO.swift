@@ -3,6 +3,12 @@ import VTISOCreatorKit
 
 // Import a client.json produced by VideoThing's visual editor and package
 // its declared values + files into the correct client bucket.
+//
+// Every ID used below ("shuffle-on-open", "greeting", "theme", "faq",
+// "resource-pack") must be declared in the imported client.json —
+// build(to:) rejects unknown field IDs. If the client.json declares a
+// bucket in `bucketDefinitions` whose bucketId equals its clientId, that
+// declared path is used; otherwise data goes to client-buckets/<clientId>/.
 func makeClientExtensionVTISO(outputURL: URL,
                               video: URL,
                               clientJSON: URL,

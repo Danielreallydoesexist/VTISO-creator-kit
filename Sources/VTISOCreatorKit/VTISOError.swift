@@ -1,6 +1,6 @@
 import Foundation
 
-public enum VTISOError: Error, CustomStringConvertible {
+public enum VTISOError: Error, LocalizedError, CustomStringConvertible {
     case sourceFileMissing(URL)
     case sourceFileUnreadable(URL, underlying: Error)
     case invalidPackagePath(String)
@@ -20,6 +20,12 @@ public enum VTISOError: Error, CustomStringConvertible {
     case unknownExtensionFieldID(String)
     case invalidExtensionValue(String)
     case duplicateExtraID(String)
+
+    /// `LocalizedError` conformance so SwiftUI alerts and
+    /// `error.localizedDescription` show the real message.
+    public var errorDescription: String? {
+        description
+    }
 
     public var description: String {
         switch self {
